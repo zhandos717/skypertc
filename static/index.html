@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SkypeRTC</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="me">
+      <div class="avatar" id="meAvatar">?</div>
+      <div class="me-info">
+        <div class="me-name" id="meName">Гость</div>
+        <div class="me-status"><span class="dot online"></span>В сети</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="roomInput" placeholder="Введите имя комнаты..." />
+      <label class="pub-toggle">
+        <input type="checkbox" id="publicChk" /> <span>Публичная (видна всем)</span>
+      </label>
+    </div>
+
+    <div class="section-title">Публичные комнаты</div>
+    <ul class="contact-list" id="publicRooms"><li class="empty">Пока никого</li></ul>
+
+    <div class="section-title">Недавние</div>
+    <ul class="contact-list" id="recent"></ul>
+
+    <div class="section-title">В комнате</div>
+    <ul class="contact-list" id="peers"></ul>
+
+    <button class="join-btn" id="joinBtn">Присоединиться</button>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="room-title">
+        <div class="avatar small" id="roomAvatar">#</div>
+        <div>
+          <div class="room-name" id="roomName">Выберите комнату</div>
+          <div class="room-sub" id="roomSub">Введите название и нажмите «Присоединиться»</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="copyLinkBtn" title="Скопировать ссылку" disabled>🔗</button>
+        <button class="icon-btn" id="leaveBtn" title="Покинуть" disabled>✕</button>
+      </div>
+    </header>
+
+    <section class="video-area" id="videoArea">
+      <div class="video-tile self">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="tile-label">Вы</div>
+      </div>
+      <div id="remotes" class="remotes"></div>
+      <div class="placeholder" id="placeholder">
+        <div class="big-call-icon">📞</div>
+        <h2>Готовы к звонку</h2>
+        <p>Введите имя комнаты слева и присоединитесь, чтобы начать видеозвонок</p>
+      </div>
+    </section>
+
+    <footer class="controls">
+      <button class="ctrl" id="micBtn" title="Микрофон">🎤</button>
+      <button class="ctrl" id="camBtn" title="Камера">📷</button>
+      <button class="ctrl" id="screenBtn" title="Показ экрана">🖥️</button>
+      <button class="ctrl call" id="callBtn" title="Позвонить" disabled>📞</button>
+      <button class="ctrl hangup" id="hangBtn" title="Завершить" disabled>⛔</button>
+      <button class="ctrl" id="chatBtn" title="Чат">💬</button>
+    </footer>
+  </main>
+
+  <aside class="chat" id="chatPanel">
+    <div class="chat-head">Чат комнаты</div>
+    <div class="chat-msgs" id="chatMsgs"></div>
+    <form class="chat-input" id="chatForm">
+      <input id="chatText" placeholder="Сообщение..." autocomplete="off" />
+      <button type="submit">➤</button>
+    </form>
+  </aside>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

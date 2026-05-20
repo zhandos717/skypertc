@@ -1,0 +1,17 @@
+# env / secrets
+.env
+.env.local
+
+# build artifacts
+webrtc-srv
+*.exe
+/dist
+/build
+
+# IDE
+.idea
+.vscode
+.DS_Store
+
+# omc / agents
+.omc
