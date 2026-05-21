@@ -1,17 +1,10 @@
-# env / secrets
+build/webrtc-srv
+webrtc
+bin/
 .env
 .env.local
-
-# build artifacts
-webrtc-srv
-*.exe
-/dist
-/build
-
-# IDE
-.idea
-.vscode
+.idea/
+.vscode/
 .DS_Store
-
-# omc / agents
 .omc
+.claude

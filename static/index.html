@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' wss: https: blob:; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; worker-src 'self' blob:; child-src blob:;" />
+<meta http-equiv="Permissions-Policy" content="camera=(self), microphone=(self), display-capture=(self), screen-wake-lock=(self)" />
 <title>SkypeRTC</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
@@ -12,7 +14,10 @@
     <div class="me">
       <div class="avatar" id="meAvatar">?</div>
       <div class="me-info">
-        <div class="me-name" id="meName">Гость</div>
+        <div class="me-name-row">
+          <div class="me-name" id="meName">Гость</div>
+          <button class="name-edit-btn" id="nameEditBtn" title="Изменить имя"><svg class="icon"><use href="/icons.svg#pencil"/></svg></button>
+        </div>
         <div class="me-status"><span class="dot online"></span>В сети</div>
       </div>
     </div>
@@ -46,8 +51,8 @@
         </div>
       </div>
       <div class="top-actions">
-        <button class="icon-btn" id="copyLinkBtn" title="Скопировать ссылку" disabled>🔗</button>
-        <button class="icon-btn" id="leaveBtn" title="Покинуть" disabled>✕</button>
+        <button class="icon-btn" id="copyLinkBtn" title="Скопировать ссылку" disabled><svg class="icon"><use href="/icons.svg#link"/></svg></button>
+        <button class="icon-btn" id="leaveBtn" title="Покинуть" disabled><svg class="icon"><use href="/icons.svg#log-out"/></svg></button>
       </div>
     </header>
 
@@ -55,22 +60,78 @@
       <div class="video-tile self">
         <video id="localVideo" autoplay playsinline muted></video>
         <div class="tile-label">Вы</div>
+        <button class="tile-fs-btn" id="localFsBtn" title="На весь экран"><svg class="icon"><use href="/icons.svg#maximize"/></svg></button>
+        <button class="tile-pip-btn" id="localPipBtn" title="Picture-in-Picture"><svg class="icon"><use href="/icons.svg#pip"/></svg></button>
       </div>
       <div id="remotes" class="remotes"></div>
       <div class="placeholder" id="placeholder">
-        <div class="big-call-icon">📞</div>
+        <div class="big-call-icon"><svg class="icon"><use href="/icons.svg#phone-call"/></svg></div>
         <h2>Готовы к звонку</h2>
         <p>Введите имя комнаты слева и присоединитесь, чтобы начать видеозвонок</p>
       </div>
     </section>
 
+    <div class="reactions-bar" id="reactionsBar">
+      <button class="react-btn" data-emoji="👍">👍</button>
+      <button class="react-btn" data-emoji="❤️">❤️</button>
+      <button class="react-btn" data-emoji="😂">😂</button>
+      <button class="react-btn" data-emoji="🎉">🎉</button>
+      <button class="react-btn" data-emoji="🙌">🙌</button>
+      <button class="react-btn" data-emoji="🔥">🔥</button>
+    </div>
     <footer class="controls">
-      <button class="ctrl" id="micBtn" title="Микрофон">🎤</button>
-      <button class="ctrl" id="camBtn" title="Камера">📷</button>
-      <button class="ctrl" id="screenBtn" title="Показ экрана">🖥️</button>
-      <button class="ctrl call" id="callBtn" title="Позвонить" disabled>📞</button>
-      <button class="ctrl hangup" id="hangBtn" title="Завершить" disabled>⛔</button>
-      <button class="ctrl" id="chatBtn" title="Чат">💬</button>
+      <button class="ctrl" id="micBtn" title="Микрофон">
+        <svg class="icon icon-on"><use href="/icons.svg#mic"/></svg>
+        <svg class="icon icon-off"><use href="/icons.svg#mic-off"/></svg>
+      </button>
+      <button class="ctrl" id="camBtn" title="Камера">
+        <svg class="icon icon-on"><use href="/icons.svg#video"/></svg>
+        <svg class="icon icon-off"><use href="/icons.svg#video-off"/></svg>
+      </button>
+      <button class="ctrl" id="screenBtn" title="Показ экрана">
+        <svg class="icon icon-on"><use href="/icons.svg#monitor"/></svg>
+        <svg class="icon icon-off"><use href="/icons.svg#monitor-x"/></svg>
+      </button>
+      <button class="ctrl call" id="callBtn" title="Позвонить" disabled><svg class="icon"><use href="/icons.svg#phone"/></svg></button>
+      <button class="ctrl hangup" id="hangBtn" title="Завершить" disabled><svg class="icon"><use href="/icons.svg#phone-off"/></svg></button>
+      <button class="ctrl" id="flipBtn" title="Сменить камеру"><svg class="icon"><use href="/icons.svg#refresh-cw"/></svg></button>
+      <div class="ctrl-more-wrap">
+        <button class="ctrl" id="moreBtn" title="Дополнительно" aria-haspopup="true" aria-expanded="false"><svg class="icon"><use href="/icons.svg#more"/></svg></button>
+        <div class="more-menu" id="moreMenu" role="menu" hidden>
+          <button class="more-item" id="miBgBlur" role="menuitem">
+            <svg class="icon"><use href="/icons.svg#sparkles"/></svg>
+            <span class="more-label">Размыть фон</span>
+            <span class="more-state" data-state="off">выкл</span>
+          </button>
+          <button class="more-item" id="miBgImage" role="menuitem">
+            <svg class="icon"><use href="/icons.svg#image"/></svg>
+            <span class="more-label">Фон-картинка...</span>
+          </button>
+          <button class="more-item" id="miBgOff" role="menuitem" hidden>
+            <svg class="icon"><use href="/icons.svg#x"/></svg>
+            <span class="more-label">Убрать эффект фона</span>
+          </button>
+          <div class="more-sep"></div>
+          <button class="more-item" id="miTheme" role="menuitem">
+            <svg class="icon"><use href="/icons.svg#sparkles"/></svg>
+            <span class="more-label">Тема</span>
+            <span class="more-state" data-state="off">авто</span>
+          </button>
+          <div class="more-sep"></div>
+          <button class="more-item" id="miDocPip" role="menuitem">
+            <svg class="icon"><use href="/icons.svg#pip"/></svg>
+            <span class="more-label">Вынести в плавающее окно</span>
+          </button>
+          <div class="more-sep"></div>
+          <button class="more-item" id="miMusic" role="menuitem">
+            <svg class="icon"><use href="/icons.svg#music"/></svg>
+            <span class="more-label">Музыкальный режим</span>
+            <span class="more-state" data-state="off">выкл</span>
+          </button>
+          <input type="file" id="bgImageInput" accept="image/*" hidden>
+        </div>
+      </div>
+      <button class="ctrl" id="chatBtn" title="Чат"><svg class="icon"><use href="/icons.svg#message-circle"/></svg></button>
     </footer>
   </main>
 
@@ -79,10 +140,25 @@
     <div class="chat-msgs" id="chatMsgs"></div>
     <form class="chat-input" id="chatForm">
       <input id="chatText" placeholder="Сообщение..." autocomplete="off" />
-      <button type="submit">➤</button>
+      <button type="submit"><svg class="icon"><use href="/icons.svg#send"/></svg></button>
     </form>
   </aside>
 </div>
-<script src="/app.js"></script>
+<nav class="mobile-nav" id="mobileNav">
+  <button class="mob-tab" id="tabRoom" data-tab="sidebar">
+    <span class="mob-icon"><svg class="icon"><use href="/icons.svg#users"/></svg></span>
+    <span class="mob-label">Комната</span>
+  </button>
+  <button class="mob-tab active" id="tabCall" data-tab="main">
+    <span class="mob-icon"><svg class="icon"><use href="/icons.svg#video"/></svg></span>
+    <span class="mob-label">Звонок</span>
+  </button>
+  <button class="mob-tab" id="tabChat" data-tab="chat">
+    <span class="mob-icon"><svg class="icon"><use href="/icons.svg#message-circle"/></svg></span>
+    <span class="mob-label">Чат</span>
+    <span class="chat-badge" id="chatBadge"></span>
+  </button>
+</nav>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

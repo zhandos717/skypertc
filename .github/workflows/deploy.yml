@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to VPS
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      DEPLOY_DIR: /opt/skypertc
+      DEPLOY_SVC: skypertc
+      HEALTH_URL: https://meet.zhandos.top/healthz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build linux/amd64 binary
+        run: |
+          mkdir -p bin
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+            go build -ldflags="-s -w" -o bin/webrtc-srv ./cmd/server
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Trust host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload binary
+        run: |
+          rsync -avz --human-readable \
+            bin/webrtc-srv \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_DIR }}/
+
+      - name: Upload static assets
+        run: |
+          rsync -avz --human-readable --delete \
+            static/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_DIR }}/static/
+
+      - name: Restart service
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo /bin/systemctl restart ${{ env.DEPLOY_SVC }} && \
+             sleep 2 && \
+             sudo /bin/systemctl is-active ${{ env.DEPLOY_SVC }}"
+
+      - name: Healthcheck
+        run: |
+          for i in 1 2 3 4 5; do
+            body=$(curl -fsS --max-time 5 "${{ env.HEALTH_URL }}" || true)
+            if [ "$body" = "ok" ]; then
+              echo "Healthcheck passed: $body"
+              exit 0
+            fi
+            echo "Attempt $i failed (got: '$body'), retrying..."
+            sleep 2
+          done
+          echo "Healthcheck failed after 5 attempts"
+          exit 1
