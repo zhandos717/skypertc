@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,9 @@ import (
 )
 
 func main() {
+	// PWA manifest MIME — not in Go's built-in table, register explicitly.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+
 	h := hub.NewHub()
 	cfg := config.ClientConfig{IceServers: config.BuildIceServers()}
 	cfgJSON, _ := json.Marshal(cfg)
