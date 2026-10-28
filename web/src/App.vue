@@ -32,10 +32,15 @@ function parseHash() {
 
 // Управление звонком снаружи (страница чата рисует свои кнопки): сообщения только от родительского окна.
 function setupParentBridge() {
-  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value }, '*');
+  // Родитель — единственное окно, которое может нас встроить (frame-ancestors на nginx); его origin берём из браузера, не из сообщений.
+  let parentOrigin = '';
+  try { parentOrigin = location.ancestorOrigins?.[0] || new URL(document.referrer).origin; } catch {}
+  if (!parentOrigin) return;
+
+  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value }, parentOrigin);
 
   window.addEventListener('message', async (event) => {
-    if (event.source !== window.parent || event.data?.tt !== 'cmd') return;
+    if (event.origin !== parentOrigin || event.source !== window.parent || event.data?.tt !== 'cmd') return;
     const action = event.data.action;
     if (action === 'hangup') {
       leave();
