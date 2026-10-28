@@ -1,9 +1,11 @@
 <script setup>
-import { onMounted, computed } from 'vue';
+import { onMounted, computed, watch } from 'vue';
 import { state } from './stores/app.js';
 import { useTheme } from './composables/useTheme.js';
 import { useSignaling, join } from './composables/useSignaling.js';
 import { startPolling } from './composables/useRooms.js';
+import { micOn, camOn, screenOn, ensureMedia, toggleMic, toggleCam, toggleScreen } from './composables/useMedia.js';
+import { leave } from './composables/useSignaling.js';
 
 import Sidebar from './components/Sidebar.vue';
 import Topbar from './components/Topbar.vue';
@@ -28,6 +30,27 @@ function parseHash() {
   return { room: decodeURIComponent(raw.slice(0, idx)).trim(), secret: raw.slice(idx + 1) };
 }
 
+// Управление звонком снаружи (страница чата рисует свои кнопки): сообщения только от родительского окна.
+function setupParentBridge() {
+  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value }, '*');
+
+  window.addEventListener('message', async (event) => {
+    if (event.source !== window.parent || event.data?.tt !== 'cmd') return;
+    const action = event.data.action;
+    if (action === 'hangup') {
+      leave();
+      return;
+    }
+    if (!state.localStream) await ensureMedia();
+    if (action === 'mic') toggleMic();
+    if (action === 'cam') toggleCam();
+    if (action === 'screen') await toggleScreen();
+  });
+
+  watch([micOn, camOn, screenOn], report, { immediate: true });
+  watch(() => state.currentRoom, report);
+}
+
 onMounted(() => {
   initTheme();
   loadIceConfig();
@@ -47,6 +70,8 @@ onMounted(() => {
       || (prompt('Ваше имя?', 'Гость') || 'Гость');
     localStorage.setItem('skypertc.name', state.userName);
   }
+
+  if (state.embed) setupParentBridge();
 
   // Auto-join from URL hash (#room or #room:secret). When a hash is present
   // the user explicitly wants to enter that room — jump to the call panel.

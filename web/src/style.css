@@ -1244,12 +1244,14 @@ body {
   .video-area { padding: var(--sp-6); }
 }
 
-/* ── Встроенный режим (iframe в чате teztaxi) ── */
-.app.embed { grid-template-columns: 1fr 320px; }
-.app.embed .sidebar { display: none; }
-@media (max-width: 700px) {
-  .app.embed { display: block; }
-  .app.embed .main { display: flex; }
-}
-/* только голос: кнопка камеры бессмысленна */
-.app.audio-only [data-role="cam"] { display: none; }
+/* ── Встроенный режим (iframe в чате teztaxi): только видео и своя компактная панель ── */
+.app.embed { display: block; background: #0e1116; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; }
+.app.embed .sidebar, .app.embed .topbar, .app.embed .chat, .app.embed .reactions-bar,
+.app.embed .ctrl-more-wrap, .app.embed #chatBtn, .app.embed .ctrl.hangup { display: none; }
+.app.embed .main { height: 100%; display: flex; flex-direction: column; }
+.app.embed .controls { justify-content: center; gap: 12px; padding: 10px; background: #161b22; border: 0; }
+.app.embed .ctrl { width: 44px; height: 44px; border-radius: 50%; background: #232a33; border: 0; color: #fff; }
+.app.embed .ctrl:hover:not(:disabled) { background: #2f3846; box-shadow: none; }
+.app.embed .ctrl.off { background: #d92d20; color: #fff; }
+/* только голос: всё делает панель чата, сама страница не рисуется */
+.app.audio-only { visibility: hidden; }
