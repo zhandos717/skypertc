@@ -16,6 +16,10 @@ export const state = reactive({
   peerNames: new Map(),
   rtcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
   userName: '',
+  /** Встроенный режим (iframe в чате): без боковой панели и без вопроса про имя. */
+  embed: false,
+  /** Только голос: камера не запрашивается. */
+  audioOnly: false,
   musicMode: false,
   bgEffectOn: false,
   screenSharing: false,

@@ -33,10 +33,20 @@ onMounted(() => {
   loadIceConfig();
   startPolling();
 
-  // Establish/persist user name.
-  state.userName = localStorage.getItem('skypertc.name')
-    || (prompt('Ваше имя?', 'Гость') || 'Гость');
-  localStorage.setItem('skypertc.name', state.userName);
+  // Параметры встраивания: ?embed=1&mode=audio|video&name=Иван
+  const query = new URLSearchParams(location.search);
+  state.embed = query.get('embed') === '1';
+  state.audioOnly = query.get('mode') === 'audio';
+  const nameFromUrl = (query.get('name') || '').trim().slice(0, 60);
+
+  // Establish/persist user name. Имя из ссылки приоритетнее и не сохраняется: звонок идёт от имени вошедшего в чат.
+  if (nameFromUrl) {
+    state.userName = nameFromUrl;
+  } else {
+    state.userName = localStorage.getItem('skypertc.name')
+      || (prompt('Ваше имя?', 'Гость') || 'Гость');
+    localStorage.setItem('skypertc.name', state.userName);
+  }
 
   // Auto-join from URL hash (#room or #room:secret). When a hash is present
   // the user explicitly wants to enter that room — jump to the call panel.
@@ -62,7 +72,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" :class="{ embed: state.embed, 'audio-only': state.audioOnly }">
     <Sidebar />
     <main class="main" :class="mainClass">
       <Topbar />
@@ -72,7 +82,7 @@ onMounted(() => {
     </main>
     <Chat />
   </div>
-  <MobileNav />
+  <MobileNav v-if="!state.embed" />
   <ToastStack />
   <DevicesModal />
 </template>

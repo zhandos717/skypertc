@@ -29,7 +29,7 @@ export async function ensureMedia() {
   if (state.localStream) return state.localStream;
   try {
     state.localStream = await navigator.mediaDevices.getUserMedia({
-      video: {
+      video: state.audioOnly ? false : {
         width:  { ideal: 1280, max: 1920 },
         height: { ideal: 720,  max: 1080 },
         frameRate: { ideal: 30, max: 60 },

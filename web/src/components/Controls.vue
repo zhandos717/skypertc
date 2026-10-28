@@ -33,7 +33,7 @@ function tabletChatToggle() {
       <Icon name="mic" class="icon-on" />
       <Icon name="mic-off" class="icon-off" />
     </button>
-    <button class="ctrl" :class="{ off: !camOn }" title="Камера" @click="clickCam">
+    <button class="ctrl" data-role="cam" :class="{ off: !camOn }" title="Камера" @click="clickCam">
       <Icon name="video" class="icon-on" />
       <Icon name="video-off" class="icon-off" />
     </button>
