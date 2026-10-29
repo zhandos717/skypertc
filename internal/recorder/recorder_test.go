@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ type fakeClient struct {
 	pcs  map[string]*webrtc.PeerConnection
 	seen map[string]string
 	name string
+	got  int32
 }
 
 func newFakeClient(t *testing.T, url, room, secret, name string) *fakeClient {
@@ -54,6 +56,14 @@ func (c *fakeClient) pc(id string) *webrtc.PeerConnection {
 		return pc
 	}
 	pc, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
+	pc.OnTrack(func(tr *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+		for {
+			if _, _, err := tr.ReadRTP(); err != nil {
+				return
+			}
+			atomic.AddInt32(&c.got, 1)
+		}
+	})
 	track, _ := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "audio", "p")
 	_, _ = pc.AddTrack(track)
 	pc.OnICECandidate(func(ic *webrtc.ICECandidate) {
@@ -139,13 +149,11 @@ func TestRecordsBothParticipantsAndUploads(t *testing.T) {
 	}))
 	defer cb.Close()
 
-	mgr := recorder.NewManager(recorder.Config{WSURL: wsURL, Dir: t.TempDir(), CallbackURL: cb.URL + "/calls/{id}/recording", Secret: "s3"})
+	mgr := recorder.NewManager(recorder.Config{WSURL: wsURL, Dir: t.TempDir(), CallbackURL: cb.URL + "/calls/{id}/recording", Secret: "s3", Announce: true})
 
 	a := newFakeClient(t, wsURL, "room1", "sec", "Анна")
 	time.Sleep(200 * time.Millisecond)
 	b := newFakeClient(t, wsURL, "room1", "sec", "Иван")
-	_ = a
-	_ = b
 	time.Sleep(500 * time.Millisecond)
 
 	if err := mgr.Start(42, "room1", "sec"); err != nil {
@@ -153,6 +161,9 @@ func TestRecordsBothParticipantsAndUploads(t *testing.T) {
 	}
 	time.Sleep(4 * time.Second)
 	mgr.Stop(42)
+	if atomic.LoadInt32(&a.got) < 50 || atomic.LoadInt32(&b.got) < 50 {
+		t.Fatalf("оповещение не дошло: a=%d b=%d пакетов", a.got, b.got)
+	}
 
 	select {
 	case <-uploaded:

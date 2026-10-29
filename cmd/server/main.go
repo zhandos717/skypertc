@@ -59,6 +59,7 @@ func main() {
 			Secret:      secret,
 			IceServers:  cfg.IceServers,
 			PublicIP:    os.Getenv("RECORD_PUBLIC_IP"),
+			Announce:    os.Getenv("RECORD_ANNOUNCE") != "0",
 			UDPMin:      uint16(portEnv("RECORD_UDP_MIN")),
 			UDPMax:      uint16(portEnv("RECORD_UDP_MAX")),
 		})

@@ -4,6 +4,7 @@ package recorder
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,10 +21,17 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media"
+	"github.com/pion/webrtc/v4/pkg/media/oggreader"
 	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
 
 	"webrtc/internal/config"
 )
+
+// Оповещение «разговор записывается»: Opus в Ogg, одна страница на пакет в 20 мс (ffmpeg -page_duration 20000).
+//
+//go:embed announcement.ogg
+var announcementOgg []byte
 
 // BotName узнаётся клиентами: участника с таким именем в интерфейсе не показывают.
 const BotName = "__rec__"
@@ -46,6 +54,7 @@ type Config struct {
 	Secret      string
 	IceServers  []config.IceServer
 	PublicIP    string
+	Announce    bool
 	UDPMin      uint16
 	UDPMax      uint16
 }
@@ -97,9 +106,11 @@ type segment struct {
 }
 
 type peer struct {
-	pc      *webrtc.PeerConnection
-	pending []webrtc.ICECandidateInit
-	remote  bool
+	pc       *webrtc.PeerConnection
+	pending  []webrtc.ICECandidateInit
+	announce *webrtc.TrackLocalStaticSample
+	played   bool
+	remote   bool
 }
 
 type session struct {
@@ -218,9 +229,28 @@ func (s *session) newPeer(id string) (*peer, error) {
 		return nil, err
 	}
 	p := &peer{pc: pc}
+	if s.m.cfg.Announce {
+		if track, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "announce", "recorder"); err == nil {
+			if _, err := pc.AddTrack(track); err == nil {
+				p.announce = track
+			}
+		}
+	}
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c != nil {
 			_ = s.send(map[string]any{"type": "ice", "to": id, "payload": c.ToJSON()})
+		}
+	})
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state != webrtc.PeerConnectionStateConnected || p.announce == nil {
+			return
+		}
+		s.mu.Lock()
+		first := !p.played
+		p.played = true
+		s.mu.Unlock()
+		if first {
+			go playAnnouncement(p.announce)
 		}
 	})
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
@@ -240,8 +270,10 @@ func (s *session) offerTo(id string) {
 		log.Printf("recorder %d: peer: %v", s.callID, err)
 		return
 	}
-	if _, err := p.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
-		return
+	if p.announce == nil {
+		if _, err := p.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
+			return
+		}
 	}
 	offer, err := p.pc.CreateOffer(nil)
 	if err != nil || p.pc.SetLocalDescription(offer) != nil {
@@ -518,4 +550,32 @@ func toPion(in []config.IceServer) []webrtc.ICEServer {
 		out = append(out, webrtc.ICEServer{URLs: s.URLs, Username: s.Username, Credential: s.Credential})
 	}
 	return out
+}
+
+func playAnnouncement(track *webrtc.TrackLocalStaticSample) {
+	reader, _, err := oggreader.NewWith(bytes.NewReader(announcementOgg))
+	if err != nil {
+		log.Printf("recorder: announcement: %v", err)
+		return
+	}
+	var last uint64
+	for {
+		data, header, err := reader.ParseNextPage()
+		if err != nil {
+			return
+		}
+		// первые две страницы Ogg — заголовки Opus, в эфир не идут
+		if bytes.HasPrefix(data, []byte("OpusHead")) || bytes.HasPrefix(data, []byte("OpusTags")) {
+			continue
+		}
+		duration := 20 * time.Millisecond
+		if header.GranulePosition > last {
+			duration = time.Duration(float64(header.GranulePosition-last)/48000*1000) * time.Millisecond
+		}
+		last = header.GranulePosition
+		if err := track.WriteSample(media.Sample{Data: data, Duration: duration}); err != nil {
+			return
+		}
+		time.Sleep(duration)
+	}
 }
