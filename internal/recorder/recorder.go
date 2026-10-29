@@ -75,6 +75,7 @@ func (m *Manager) Start(callID int64, room, secret string) error {
 	if _, ok := m.run[callID]; ok {
 		return nil
 	}
+	log.Printf("recorder %d: start room=%s", callID, room)
 	s := &session{m: m, callID: callID, room: room, secret: secret, peers: map[string]*peer{}, perPeer: map[string]int{}, started: time.Now(), done: make(chan struct{})}
 	if err := s.connect(); err != nil {
 		return err
@@ -195,6 +196,7 @@ func (s *session) loop() {
 		}
 		switch msg.Type {
 		case "welcome":
+			log.Printf("recorder %d: welcome, peers=%d", s.callID, len(msg.Peers))
 			for _, p := range msg.Peers {
 				s.offerTo(p.ID)
 			}
@@ -211,6 +213,7 @@ func (s *session) loop() {
 		case "ice":
 			s.onICE(msg.From, msg.Payload)
 		case "denied":
+			log.Printf("recorder %d: denied", s.callID)
 			s.finish(0)
 			return
 		}
@@ -242,6 +245,7 @@ func (s *session) newPeer(id string) (*peer, error) {
 		}
 	})
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		log.Printf("recorder %d: peer %s %s", s.callID, id, state)
 		if state != webrtc.PeerConnectionStateConnected || p.announce == nil {
 			return
 		}
@@ -254,6 +258,7 @@ func (s *session) newPeer(id string) (*peer, error) {
 		}
 	})
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+		log.Printf("recorder %d: track %s from %s", s.callID, track.Kind(), id)
 		if track.Kind() == webrtc.RTPCodecTypeAudio {
 			s.recordTrack(id, track)
 		}
@@ -417,6 +422,7 @@ func (s *session) recordTrack(peerID string, track *webrtc.TrackRemote) {
 }
 
 func (s *session) finish(delay time.Duration) {
+	log.Printf("recorder %d: finish requested (delay %s)", s.callID, delay)
 	s.mu.Lock()
 	if s.finishing {
 		s.mu.Unlock()
@@ -450,6 +456,7 @@ func (s *session) publish() {
 	segs := append([]*segment(nil), s.segs...)
 	s.mu.Unlock()
 
+	log.Printf("recorder %d: finishing, segments=%d", s.callID, len(segs))
 	usable := segs[:0]
 	for _, seg := range segs {
 		if st, err := os.Stat(seg.path); err == nil && st.Size() > 2048 {
@@ -457,6 +464,7 @@ func (s *session) publish() {
 		}
 	}
 	if len(usable) == 0 {
+		log.Printf("recorder %d: no usable audio, nothing to upload", s.callID)
 		_ = os.RemoveAll(s.dir())
 		return
 	}
@@ -470,6 +478,7 @@ func (s *session) publish() {
 		log.Printf("recorder %d: upload: %v (file kept: %s)", s.callID, err, out)
 		return
 	}
+	log.Printf("recorder %d: uploaded", s.callID)
 	_ = os.RemoveAll(s.dir())
 }
 
