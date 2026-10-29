@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	wsPongWait    = 60 * time.Second
-	wsPingPeriod  = 25 * time.Second
-	wsWriteWait   = 10 * time.Second
-	wsMaxMsgSize  = 256 * 1024
+	wsPongWait   = 60 * time.Second
+	wsPingPeriod = 25 * time.Second
+	wsWriteWait  = 10 * time.Second
+	wsMaxMsgSize = 256 * 1024
 )
 
 // allowedOrigins is populated from ALLOWED_ORIGINS env var (comma-separated).
@@ -163,6 +163,7 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 				}
 			}
 			c.ID = randutil.RandID()
+			c.Name = m.Name
 			c.Room = m.Room
 			room := h.GetOrCreateRoom(m.Room, m.Public)
 			room.Mu.Lock()
@@ -174,7 +175,7 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room.Mu.Lock()
 			peers := make([]map[string]string, 0, len(room.Clients))
 			for _, p := range room.Clients {
-				peers = append(peers, map[string]string{"id": p.ID})
+				peers = append(peers, map[string]string{"id": p.ID, "name": p.Name})
 			}
 			room.Clients[c.ID] = c
 			others := make([]*hub.Client, 0, len(room.Clients)-1)
