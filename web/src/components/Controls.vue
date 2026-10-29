@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { state } from '../stores/app.js';
 import {
   micOn, camOn, screenOn,
@@ -11,6 +11,19 @@ import MoreMenu from './MoreMenu.vue';
 import Icon from './Icon.vue';
 
 const moreOpen = ref(false);
+
+const cameraCount = ref(0);
+async function countCameras() {
+  try {
+    cameraCount.value = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput').length;
+  } catch { cameraCount.value = 0; }
+}
+onMounted(() => {
+  countCameras();
+  navigator.mediaDevices?.addEventListener?.('devicechange', countCameras);
+});
+onBeforeUnmount(() => navigator.mediaDevices?.removeEventListener?.('devicechange', countCameras));
+watch(() => state.localStream, countCameras);
 
 async function clickMic()    { if (!state.localStream) await ensureMedia(); toggleMic(); }
 async function clickCam()    { if (!state.localStream) await ensureMedia(); toggleCam(); }
@@ -44,7 +57,7 @@ function tabletChatToggle() {
     <button class="ctrl hangup" :disabled="!canHang" title="Завершить" @click="clickHang">
       <Icon name="phone-off" />
     </button>
-    <button class="ctrl" title="Сменить камеру" @click="clickFlip">
+    <button v-if="cameraCount > 1 && !state.audioOnly" class="ctrl" title="Сменить камеру" @click="clickFlip">
       <Icon name="refresh-cw" />
     </button>
     <div class="ctrl-more-wrap">
