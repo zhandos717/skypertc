@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -30,7 +31,10 @@ const BotName = "__rec__"
 const (
 	emptyGrace  = 30 * time.Second
 	maxDuration = 4 * time.Hour
-	minSeconds  = 2
+	maxPeers    = 8
+	maxSegments = 16
+	maxSegBytes = 100 << 20
+	maxSesBytes = 300 << 20
 )
 
 type Config struct {
@@ -111,6 +115,7 @@ type session struct {
 	peers map[string]*peer
 	segs  []*segment
 
+	total     int64
 	finishing bool
 	done      chan struct{}
 	timer     *time.Timer
@@ -147,7 +152,7 @@ func (s *session) connect() error {
 	if err := os.MkdirAll(s.dir(), 0o750); err != nil {
 		return err
 	}
-	return s.send(map[string]any{"type": "join", "room": s.room, "secret": s.secret, "name": BotName})
+	return s.send(map[string]any{"type": "join", "room": s.room, "secret": s.secret, "name": BotName, "token": s.m.cfg.Secret})
 }
 
 func (s *session) dir() string { return filepath.Join(s.m.cfg.Dir, fmt.Sprint(s.callID)) }
@@ -200,6 +205,12 @@ func (s *session) loop() {
 }
 
 func (s *session) newPeer(id string) (*peer, error) {
+	s.mu.Lock()
+	full := len(s.peers) >= maxPeers
+	s.mu.Unlock()
+	if full {
+		return nil, fmt.Errorf("слишком много участников")
+	}
 	pc, err := s.api.NewPeerConnection(webrtc.Configuration{ICEServers: toPion(s.m.cfg.IceServers)})
 	if err != nil {
 		return nil, err
@@ -342,8 +353,17 @@ func (s *session) recordTrack(peerID string, track *webrtc.TrackRemote) {
 	}
 	seg := &segment{path: path, offset: time.Since(s.started), writer: w}
 	s.mu.Lock()
-	s.segs = append(s.segs, seg)
+	tooMany := len(s.segs) >= maxSegments
+	if !tooMany {
+		s.segs = append(s.segs, seg)
+	}
 	s.mu.Unlock()
+	if tooMany {
+		_ = w.Close()
+		_ = os.Remove(path)
+		return
+	}
+	var written int64
 
 	for {
 		pkt, _, err := track.ReadRTP()
@@ -351,6 +371,10 @@ func (s *session) recordTrack(peerID string, track *webrtc.TrackRemote) {
 			break
 		}
 		if err := w.WriteRTP(pkt); err != nil {
+			break
+		}
+		written += int64(len(pkt.Payload))
+		if written > maxSegBytes || atomic.AddInt64(&s.total, int64(len(pkt.Payload))) > maxSesBytes {
 			break
 		}
 	}

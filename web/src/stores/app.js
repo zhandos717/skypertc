@@ -14,6 +14,7 @@ export const state = reactive({
   /** id → { id, name, stream, abr: { tier, kbps, loss, rtt, q } | null, speaking } */
   peers: new Map(),
   peerNames: new Map(),
+  hiddenPeers: new Set(),
   rtcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
   userName: '',
   /** Встроенный режим (iframe в чате): без боковой панели и без вопроса про имя. */

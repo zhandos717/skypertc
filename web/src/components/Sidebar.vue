@@ -23,7 +23,7 @@ const secretLocked = computed(() =>
 );
 
 const meInitial = computed(() => (state.userName || '?').charAt(0).toUpperCase());
-const peerList = computed(() => Array.from(state.peers.entries()).filter(([id]) => state.peerNames.get(id) !== '__rec__').map(([, entry]) => entry));
+const peerList = computed(() => Array.from(state.peers.entries()).filter(([id]) => !state.hiddenPeers.has(id)).map(([, entry]) => entry));
 
 function setVis(pub) {
   if (secretLocked.value) return;

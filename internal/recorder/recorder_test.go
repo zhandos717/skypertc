@@ -109,6 +109,7 @@ func TestRecordsBothParticipantsAndUploads(t *testing.T) {
 		t.Skip("ffmpeg не установлен")
 	}
 
+	t.Setenv("RECORD_SECRET", "s3")
 	h := hub.NewHub()
 	limiter := ratelimit.New(20)
 	mux := http.NewServeMux()

@@ -4,7 +4,7 @@ import { state, layout } from '../stores/app.js';
 import VideoTile from './VideoTile.vue';
 import Placeholder from './Placeholder.vue';
 
-const peerList = computed(() => Array.from(state.peers.entries()).filter(([id]) => state.peerNames.get(id) !== '__rec__').map(([, entry]) => entry));
+const peerList = computed(() => Array.from(state.peers.entries()).filter(([id]) => !state.hiddenPeers.has(id)).map(([, entry]) => entry));
 const count = computed(() => peerList.value.length + 1);
 </script>
 

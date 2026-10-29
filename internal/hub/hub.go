@@ -11,10 +11,12 @@ import (
 type Client struct {
 	ID   string
 	Name string
-	Room string
-	Conn *websocket.Conn
-	Send chan []byte
-	Mu   sync.Mutex
+	// Recorder выставляет только сервер: join с верным RECORD_SECRET; имя от клиента ничего не значит.
+	Recorder bool
+	Room     string
+	Conn     *websocket.Conn
+	Send     chan []byte
+	Mu       sync.Mutex
 }
 
 type Room struct {

@@ -1,6 +1,7 @@
 package signal
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -44,6 +45,7 @@ type SignalMsg struct {
 	Name    string          `json:"name,omitempty"`
 	Public  bool            `json:"public,omitempty"`
 	Secret  string          `json:"secret,omitempty"`
+	Token   string          `json:"token,omitempty"`
 	From    string          `json:"from,omitempty"`
 	To      string          `json:"to,omitempty"`
 	Reason  string          `json:"reason,omitempty"`
@@ -163,7 +165,11 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 				}
 			}
 			c.ID = randutil.RandID()
+			c.Recorder = isRecorder(m.Token)
 			c.Name = m.Name
+			if !c.Recorder && m.Name == recorderName {
+				c.Name = "Гость"
+			}
 			c.Room = m.Room
 			room := h.GetOrCreateRoom(m.Room, m.Public)
 			room.Mu.Lock()
@@ -173,9 +179,9 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room.Mu.Unlock()
 
 			room.Mu.Lock()
-			peers := make([]map[string]string, 0, len(room.Clients))
+			peers := make([]map[string]any, 0, len(room.Clients))
 			for _, p := range room.Clients {
-				peers = append(peers, map[string]string{"id": p.ID, "name": p.Name})
+				peers = append(peers, map[string]any{"id": p.ID, "name": p.Name, "recorder": p.Recorder})
 			}
 			room.Clients[c.ID] = c
 			others := make([]*hub.Client, 0, len(room.Clients)-1)
@@ -194,9 +200,10 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			c.Write(welcome)
 
 			joined, _ := json.Marshal(map[string]any{
-				"type": "peer-joined",
-				"from": c.ID,
-				"name": m.Name,
+				"type":     "peer-joined",
+				"from":     c.ID,
+				"name":     c.Name,
+				"recorder": c.Recorder,
 			})
 			for _, p := range others {
 				p.Write(joined)
@@ -238,4 +245,12 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			}
 		}
 	}
+}
+
+const recorderName = "__rec__"
+
+// isRecorder: бот записи доказывает себя общим секретом, который знает только наш бэкенд.
+func isRecorder(token string) bool {
+	secret := os.Getenv("RECORD_SECRET")
+	return secret != "" && subtle.ConstantTimeCompare([]byte(token), []byte(secret)) == 1
 }

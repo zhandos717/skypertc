@@ -28,12 +28,14 @@ function attachHandlers(ws) {
         state.connectionStatus = `${m.peers.length} участник(ов)`;
         for (const p of m.peers) {
           state.peerNames.set(p.id, p.name || 'Собеседник');
+          if (p.recorder) state.hiddenPeers.add(p.id);
           createPeer(p.id, true, { send: wsSend, onReaction });
         }
         break;
       }
       case 'peer-joined': {
         state.peerNames.set(m.from, m.name || 'Собеседник');
+        if (m.recorder) state.hiddenPeers.add(m.from);
         state.connectionStatus = `${state.peers.size + 1} участник(ов)`;
         break;
       }
