@@ -76,6 +76,10 @@ export function createPeer(id, initiator, { send, onReaction }) {
     if (!entry) return;
     try { if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0.05; } catch {}
     entry.stream = e.streams[0];
+    if (e.track.kind === 'video') {
+      state.remoteVideo = true;
+      state.audioOnly = false;
+    }
     // Start (or restart) speaking detection on the incoming stream.
     const old = internals.speakStops.get(id);
     if (old) old();

@@ -4,7 +4,7 @@ import { state } from './stores/app.js';
 import { useTheme } from './composables/useTheme.js';
 import { useSignaling, join } from './composables/useSignaling.js';
 import { startPolling } from './composables/useRooms.js';
-import { micOn, camOn, screenOn, ensureMedia, toggleMic, toggleCam, toggleScreen } from './composables/useMedia.js';
+import { micOn, camOn, screenOn, ensureMedia, upgradeToVideo, toggleMic, toggleCam, toggleScreen } from './composables/useMedia.js';
 import { leave } from './composables/useSignaling.js';
 
 import Sidebar from './components/Sidebar.vue';
@@ -37,7 +37,8 @@ function setupParentBridge() {
   try { parentOrigin = location.ancestorOrigins?.[0] || new URL(document.referrer).origin; } catch {}
   if (!parentOrigin) return;
 
-  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value }, parentOrigin);
+  const hasVideo = () => !!state.localStream?.getVideoTracks().some((t) => t.enabled) || state.remoteVideo;
+  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value, video: hasVideo() }, parentOrigin);
 
   window.addEventListener('message', async (event) => {
     if (event.origin !== parentOrigin || event.source !== window.parent || event.data?.tt !== 'cmd') return;
@@ -47,12 +48,13 @@ function setupParentBridge() {
       return;
     }
     if (!state.localStream) await ensureMedia();
+    if (action === 'video') await upgradeToVideo();
     if (action === 'mic') toggleMic();
     if (action === 'cam') toggleCam();
     if (action === 'screen') await toggleScreen();
   });
 
-  watch([micOn, camOn, screenOn], report, { immediate: true });
+  watch([micOn, camOn, screenOn, () => state.remoteVideo, () => state.audioOnly], report, { immediate: true });
   watch(() => state.currentRoom, report);
 }
 

@@ -57,6 +57,46 @@ export async function ensureMedia() {
   return state.localStream;
 }
 
+// Звонок начался как аудио: подключаем камеру и пересогласуем соединения, чтобы собеседник получил видео.
+export async function upgradeToVideo() {
+  if (!state.localStream) await ensureMedia();
+  state.audioOnly = false;
+
+  const existing = state.localStream.getVideoTracks()[0];
+  if (existing) {
+    existing.enabled = true;
+    camOn.value = true;
+    return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 60 } },
+      audio: false,
+    });
+  } catch (e) {
+    state.audioOnly = true;
+    toastError('Не удалось включить камеру: ' + (e?.message || e));
+    return;
+  }
+
+  const track = stream.getVideoTracks()[0];
+  track.contentHint = 'motion';
+  state.localStream.addTrack(track);
+  camOn.value = true;
+
+  for (const [pid, pc] of internals.pcs) {
+    try {
+      pc.addTrack(track, state.localStream);
+      const offer = await pc.createOffer();
+      offer.sdp = tweakOpusSdp(offer.sdp, state.musicMode);
+      await pc.setLocalDescription(offer);
+      wsSend({ type: 'offer', to: pid, payload: pc.localDescription });
+    } catch (e) { console.warn('video upgrade renegotiate:', e); }
+  }
+}
+
 export function toggleMic() {
   const t = state.localStream?.getAudioTracks()[0];
   if (!t) return;
@@ -211,7 +251,7 @@ export async function flipCamera() {
 export function useMedia() {
   return {
     micOn, camOn, screenOn,
-    ensureMedia, toggleMic, toggleCam, toggleScreen, flipCamera,
+    ensureMedia, upgradeToVideo, toggleMic, toggleCam, toggleScreen, flipCamera,
     enableBgBlur, enableBgImage, disableBgBlur, isBgBlurOn,
     setMusicMode,
   };

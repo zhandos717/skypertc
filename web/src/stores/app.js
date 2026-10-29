@@ -21,6 +21,7 @@ export const state = reactive({
   embed: false,
   /** Только голос: камера не запрашивается. */
   audioOnly: false,
+  remoteVideo: false,
   musicMode: false,
   bgEffectOn: false,
   screenSharing: false,

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { state } from '../stores/app.js';
 import {
   micOn, camOn, screenOn,
-  toggleMic, toggleCam, toggleScreen, flipCamera,
+  toggleMic, toggleCam, toggleScreen, flipCamera, upgradeToVideo,
   ensureMedia,
 } from '../composables/useMedia.js';
 import { leave } from '../composables/useSignaling.js';
@@ -26,7 +26,11 @@ onBeforeUnmount(() => navigator.mediaDevices?.removeEventListener?.('devicechang
 watch(() => state.localStream, countCameras);
 
 async function clickMic()    { if (!state.localStream) await ensureMedia(); toggleMic(); }
-async function clickCam()    { if (!state.localStream) await ensureMedia(); toggleCam(); }
+async function clickCam() {
+  if (!state.localStream) await ensureMedia();
+  if (!state.localStream.getVideoTracks()[0]) await upgradeToVideo();
+  else toggleCam();
+}
 async function clickScreen() { await toggleScreen(); }
 async function clickHang()   { leave(); }
 async function clickFlip()   { await flipCamera(); }
