@@ -32,7 +32,8 @@ const (
 	emptyGrace  = 30 * time.Second
 	maxDuration = 4 * time.Hour
 	maxPeers    = 8
-	maxSegments = 16
+	maxSegments = 64
+	maxPerPeer  = 3
 	maxSegBytes = 100 << 20
 	maxSesBytes = 300 << 20
 )
@@ -65,7 +66,7 @@ func (m *Manager) Start(callID int64, room, secret string) error {
 	if _, ok := m.run[callID]; ok {
 		return nil
 	}
-	s := &session{m: m, callID: callID, room: room, secret: secret, peers: map[string]*peer{}, started: time.Now(), done: make(chan struct{})}
+	s := &session{m: m, callID: callID, room: room, secret: secret, peers: map[string]*peer{}, perPeer: map[string]int{}, started: time.Now(), done: make(chan struct{})}
 	if err := s.connect(); err != nil {
 		return err
 	}
@@ -116,6 +117,7 @@ type session struct {
 	segs  []*segment
 
 	total     int64
+	perPeer   map[string]int
 	finishing bool
 	done      chan struct{}
 	timer     *time.Timer
@@ -353,9 +355,10 @@ func (s *session) recordTrack(peerID string, track *webrtc.TrackRemote) {
 	}
 	seg := &segment{path: path, offset: time.Since(s.started), writer: w}
 	s.mu.Lock()
-	tooMany := len(s.segs) >= maxSegments
+	tooMany := len(s.segs) >= maxSegments || s.perPeer[peerID] >= maxPerPeer
 	if !tooMany {
 		s.segs = append(s.segs, seg)
+		s.perPeer[peerID]++
 	}
 	s.mu.Unlock()
 	if tooMany {
