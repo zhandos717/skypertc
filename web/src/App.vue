@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, computed, watch } from 'vue';
-import { state } from './stores/app.js';
+import { state, linkState } from './stores/app.js';
 import { useTheme } from './composables/useTheme.js';
 import { useSignaling, join } from './composables/useSignaling.js';
 import { startPolling } from './composables/useRooms.js';
@@ -38,7 +38,7 @@ function setupParentBridge() {
   if (!parentOrigin) return;
 
   const hasVideo = () => !!state.localStream?.getVideoTracks().some((t) => t.enabled) || state.remoteVideo;
-  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value, video: hasVideo() }, parentOrigin);
+  const report = () => window.parent.postMessage({ tt: 'state', mic: micOn.value, cam: camOn.value, screen: screenOn.value, video: hasVideo(), link: linkState.value }, parentOrigin);
 
   window.addEventListener('message', async (event) => {
     if (event.origin !== parentOrigin || event.source !== window.parent || event.data?.tt !== 'cmd') return;
@@ -54,7 +54,7 @@ function setupParentBridge() {
     if (action === 'screen') await toggleScreen();
   });
 
-  watch([micOn, camOn, screenOn, () => state.remoteVideo, () => state.audioOnly], report, { immediate: true });
+  watch([micOn, camOn, screenOn, () => state.remoteVideo, () => state.audioOnly, linkState], report, { immediate: true });
   watch(() => state.currentRoom, report);
 }
 
@@ -108,6 +108,9 @@ onMounted(() => {
     <Sidebar />
     <main class="main" :class="mainClass">
       <Topbar />
+      <div v-if="linkState !== 'ok'" class="link-banner" :class="linkState">
+        {{ linkState === 'lost' ? 'Связь потеряна. Завершите звонок и позвоните снова' : 'Слабая связь, пытаемся восстановить…' }}
+      </div>
       <VideoArea />
       <ReactionsBar />
       <Controls />

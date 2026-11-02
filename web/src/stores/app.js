@@ -22,6 +22,8 @@ export const state = reactive({
   /** Только голос: камера не запрашивается. */
   audioOnly: false,
   remoteVideo: false,
+  /** Связь с собеседником пропала насовсем (не восстановилась за минуту). */
+  linkLost: false,
   musicMode: false,
   bgEffectOn: false,
   screenSharing: false,
@@ -53,9 +55,19 @@ export const internals = {
   screenStream: null,
   cameraVideoTrack: null,
   rawCameraTrack: null,
+  linkTimers: new Map(),
   reconnectAttempts: 0,
   reconnectTimer: null,
 };
+
+/** ok | weak (мигает или восстанавливается) | lost (сорвалась насовсем) */
+export const linkState = computed(() => {
+  if (state.linkLost) return 'lost';
+  for (const entry of state.peers.values()) {
+    if (entry.link === 'weak' || entry.abr?.q === 'bad') return 'weak';
+  }
+  return 'ok';
+});
 
 export const peerCount = computed(() => state.peers.size);
 

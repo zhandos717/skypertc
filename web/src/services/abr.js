@@ -40,6 +40,8 @@ export function makeAbr(pc, peerId) {
     lastPacketsSent: 0,
     lastPacketsLost: 0,
     goodTicks: 0,
+    badTicks: 0,
+    videoOffNotified: false,
     timer: null,
     probeTicks: 0,
   };
@@ -112,6 +114,17 @@ export function makeAbr(pc, peerId) {
     lossFraction = lostDelta / (sentDelta + lostDelta);
     abrState.lastPacketsSent = packetsSent;
     abrState.lastPacketsLost = packetsLost;
+
+    // совсем плохой канал на самом нижнем качестве: звук важнее, видео выключаем и сообщаем об этом
+    const veryBad = lossFraction > 0.10 || rtt > 0.6;
+    abrState.badTicks = veryBad ? abrState.badTicks + 1 : 0;
+    if (abrState.badTicks >= 3 && abrState.tierIdx === 0 && !abrState.videoOffNotified) {
+      abrState.videoOffNotified = true;
+      window.dispatchEvent(new CustomEvent('tt:weak-link'));
+    } else if (abrState.videoOffNotified && lossFraction < 0.03 && rtt < 0.25 && abrState.goodTicks >= 10) {
+      abrState.videoOffNotified = false;
+      window.dispatchEvent(new CustomEvent('tt:link-recovered'));
+    }
 
     const tier = TIERS[abrState.tierIdx];
     let nextBitrate = abrState.currentBitrate;

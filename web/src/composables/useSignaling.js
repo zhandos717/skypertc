@@ -132,6 +132,7 @@ export async function join({ room, isPublic, secret }) {
     }
     internals.reconnectAttempts = 0;
     clearAllPeers();
+    state.linkLost = false;
     state.currentRoom = null;
     state.connectionStatus = 'Подключение...';
 

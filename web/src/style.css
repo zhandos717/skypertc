@@ -1255,3 +1255,6 @@ body {
 .app.embed .ctrl.off { background: #d92d20; color: #fff; }
 /* только голос: всё делает панель чата, сама страница не рисуется */
 .app.audio-only { visibility: hidden; }
+
+.link-banner { padding: 6px 12px; font-size: 13px; text-align: center; background: #ffb020; color: #1b1300; flex-shrink: 0; }
+.link-banner.lost { background: #e5484d; color: #fff; }

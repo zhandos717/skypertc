@@ -6,7 +6,7 @@ import { BgEffect } from '../services/bgEffect.js';
 import { tweakOpusSdp } from '../services/sdp.js';
 import { replaceVideoTrackEverywhere, startSpeakingDetection } from './usePeers.js';
 import { applyPersisted } from './useDevices.js';
-import { toastError } from './useToast.js';
+import { toast, toastError } from './useToast.js';
 
 export const micOn = ref(true);
 export const camOn = ref(true);
@@ -255,4 +255,19 @@ export function useMedia() {
     enableBgBlur, enableBgImage, disableBgBlur, isBgBlurOn,
     setMusicMode,
   };
+}
+
+
+// Слабая связь: выключаем свою камеру, чтобы звук не пропадал; включить обратно можно самому.
+if (typeof window !== 'undefined') {
+  window.addEventListener('tt:weak-link', () => {
+    const track = state.localStream?.getVideoTracks()[0];
+    if (!track || !track.enabled || state.screenSharing) return;
+    track.enabled = false;
+    camOn.value = false;
+    toast('Слабая связь: видео выключено, чтобы сохранить звук', { type: 'error', duration: 7000 });
+  });
+  window.addEventListener('tt:link-recovered', () => {
+    if (state.localStream?.getVideoTracks()[0]?.enabled === false) toast('Связь восстановилась, можно включить видео', { type: 'ok' });
+  });
 }

@@ -52,6 +52,10 @@ function attachEventsChannel(pc, peerId, onReaction) {
   });
 }
 
+const LINK_GRACE_MS = 8_000;
+const LINK_RETRY_MS = 10_000;
+const LINK_LOST_MS = 60_000;
+
 export function createPeer(id, initiator, { send, onReaction }) {
   const pc = new RTCPeerConnection({
     ...state.rtcConfig,
@@ -89,18 +93,50 @@ export function createPeer(id, initiator, { send, onReaction }) {
     }));
   };
 
-  pc.onconnectionstatechange = () => {
-    if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) removePeer(id);
-  };
-
-  pc.oniceconnectionstatechange = () => {
-    if (pc.iceConnectionState !== 'failed') return;
-    if (!initiator) return;
+  // Короткий обрыв на слабом интернете не повод бросать собеседника: ждём, пробуем перезапустить путь
+  // и только через минуту без связи считаем её потерянной.
+  const restartIce = () => {
+    if (!initiator || pc.connectionState === 'connected' || pc.connectionState === 'closed') return;
     pc.restartIce();
     pc.createOffer({ iceRestart: true })
       .then(offer => { offer.sdp = tweakOpusSdp(offer.sdp, state.musicMode); return pc.setLocalDescription(offer); })
       .then(() => send({ type: 'offer', to: id, payload: pc.localDescription }))
       .catch(e => console.warn('ICE restart failed:', e));
+  };
+
+  const clearLinkTimers = () => {
+    const timers = internals.linkTimers.get(id);
+    if (timers) { clearTimeout(timers.grace); clearTimeout(timers.lost); clearInterval(timers.retry); }
+    internals.linkTimers.delete(id);
+  };
+
+  pc.onconnectionstatechange = () => {
+    const entry = state.peers.get(id);
+    const connection = pc.connectionState;
+
+    if (connection === 'connected') {
+      clearLinkTimers();
+      if (entry) entry.link = 'ok';
+      return;
+    }
+    if (connection === 'closed') {
+      removePeer(id);
+      return;
+    }
+    if (connection !== 'disconnected' && connection !== 'failed') return;
+
+    if (entry) entry.link = 'weak';
+    if (internals.linkTimers.has(id)) return;
+
+    internals.linkTimers.set(id, {
+      grace: setTimeout(restartIce, connection === 'failed' ? 0 : LINK_GRACE_MS),
+      retry: setInterval(restartIce, LINK_RETRY_MS),
+      lost: setTimeout(() => {
+        if (!state.peers.has(id) || pc.connectionState === 'connected') return;
+        state.linkLost = true;
+        removePeer(id);
+      }, LINK_LOST_MS),
+    });
   };
 
   pc.addEventListener('connectionstatechange', () => {
@@ -115,6 +151,7 @@ export function createPeer(id, initiator, { send, onReaction }) {
     stream: null,
     abr: null,
     speaking: false,
+    link: 'ok',
     initiator,
   };
   state.peers.set(id, entry);
@@ -133,6 +170,9 @@ export function createPeer(id, initiator, { send, onReaction }) {
 }
 
 export function removePeer(id) {
+  const timers = internals.linkTimers.get(id);
+  if (timers) { clearTimeout(timers.grace); clearTimeout(timers.lost); clearInterval(timers.retry); }
+  internals.linkTimers.delete(id);
   try { internals.abrs.get(id)?.stop(); } catch {}
   try { internals.speakStops.get(id)?.(); } catch {}
   try { internals.pcs.get(id)?.close(); } catch {}
