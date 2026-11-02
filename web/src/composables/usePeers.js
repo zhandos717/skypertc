@@ -52,7 +52,7 @@ function attachEventsChannel(pc, peerId, onReaction) {
   });
 }
 
-const LINK_GRACE_MS = 8_000;
+const LINK_GRACE_MS = 3_000;
 const LINK_RETRY_MS = 10_000;
 const LINK_LOST_MS = 60_000;
 
@@ -95,8 +95,20 @@ export function createPeer(id, initiator, { send, onReaction }) {
 
   // Короткий обрыв на слабом интернете не повод бросать собеседника: ждём, пробуем перезапустить путь
   // и только через минуту без связи считаем её потерянной.
-  const restartIce = () => {
+  const bytesIn = async () => {
+    let total = 0;
+    try { (await pc.getStats()).forEach((r) => { if (r.type === 'inbound-rtp') total += r.bytesReceived || 0; }); } catch {}
+    return total;
+  };
+  let bytesAtDrop = null;
+
+  const restartIce = async () => {
     if (!initiator || pc.connectionState === 'connected' || pc.connectionState === 'closed') return;
+    // входящие байты ещё идут: связь «мигнула» и восстанавливается сама, перезапуск только помешает
+    const now = await bytesIn();
+    const flowing = bytesAtDrop !== null && now > bytesAtDrop;
+    bytesAtDrop = now;
+    if (flowing && pc.connectionState === 'disconnected') return;
     pc.restartIce();
     pc.createOffer({ iceRestart: true })
       .then(offer => { offer.sdp = tweakOpusSdp(offer.sdp, state.musicMode); return pc.setLocalDescription(offer); })
@@ -127,6 +139,7 @@ export function createPeer(id, initiator, { send, onReaction }) {
 
     if (entry) entry.link = 'weak';
     if (internals.linkTimers.has(id)) return;
+    bytesIn().then((bytes) => { bytesAtDrop = bytes; });
 
     internals.linkTimers.set(id, {
       grace: setTimeout(restartIce, connection === 'failed' ? 0 : LINK_GRACE_MS),
