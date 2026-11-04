@@ -26,6 +26,7 @@ func main() {
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 
 	h := hub.NewHub()
+	h.Settings = hub.NewSettingsStore(hub.Settings{MaxRoomPeers: portEnvDefault("ROOM_MAX_PEERS", 2)}, config.Env("SETTINGS_FILE", "settings.json"))
 	cfg := config.ClientConfig{IceServers: config.BuildIceServers()}
 	cfgJSON, _ := json.Marshal(cfg)
 
@@ -64,6 +65,7 @@ func main() {
 			UDPMax:      uint16(portEnv("RECORD_UDP_MAX")),
 		})
 		mux.HandleFunc("/internal/record", recordHandler(secret, rec))
+		mux.HandleFunc("/internal/settings", settingsHandler(secret, h.Settings))
 		log.Printf("call recording enabled (dir=%s)", config.Env("RECORD_DIR", "./recordings"))
 	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +143,43 @@ func recordHandler(secret string, rec *recorder.Manager) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// settingsHandler: GET отдаёт текущие настройки, PUT меняет их; доступ по общему секрету, как у записи.
+func settingsHandler(secret string, store *hub.SettingsStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Record-Secret")), []byte(secret)) != 1 {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+		case http.MethodPut:
+			next := store.Get()
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&next); err != nil || next.MaxRoomPeers < 0 || next.MaxRoomPeers > 50 {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			if err := store.Set(next); err != nil {
+				log.Printf("settings save: %v", err)
+				http.Error(w, "save failed", http.StatusInternalServerError)
+				return
+			}
+			log.Printf("settings updated: %+v", next)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(store.Get())
+	}
+}
+
+func portEnvDefault(key string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v >= 0 {
+		return v
+	}
+	return def
 }
 
 func portEnv(key string) int {

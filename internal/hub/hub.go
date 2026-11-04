@@ -28,12 +28,13 @@ type Room struct {
 }
 
 type Hub struct {
-	Rooms map[string]*Room
-	Mu    sync.RWMutex
+	Rooms    map[string]*Room
+	Mu       sync.RWMutex
+	Settings *SettingsStore
 }
 
 func NewHub() *Hub {
-	return &Hub{Rooms: make(map[string]*Room)}
+	return &Hub{Rooms: make(map[string]*Room), Settings: NewSettingsStore(Settings{}, "")}
 }
 
 func (h *Hub) GetOrCreateRoom(name string, public bool) *Room {
@@ -102,4 +103,15 @@ func NewClient(conn *websocket.Conn) *Client {
 		Conn: conn,
 		Send: make(chan []byte, 32),
 	}
+}
+
+// People — число участников без бота записи; вызывать под Room.Mu.
+func (r *Room) People() int {
+	n := 0
+	for _, c := range r.Clients {
+		if !c.Recorder {
+			n++
+		}
+	}
+	return n
 }

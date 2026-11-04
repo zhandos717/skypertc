@@ -179,6 +179,13 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room.Mu.Unlock()
 
 			room.Mu.Lock()
+			if limit := h.Settings.Get().MaxRoomPeers; limit > 0 && !c.Recorder && room.Secret != "" && room.People() >= limit {
+				room.Mu.Unlock()
+				c.Room = ""
+				deny, _ := json.Marshal(map[string]any{"type": "denied", "reason": "В комнате уже максимум участников"})
+				c.Write(deny)
+				continue
+			}
 			peers := make([]map[string]any, 0, len(room.Clients))
 			for _, p := range room.Clients {
 				peers = append(peers, map[string]any{"id": p.ID, "name": p.Name, "recorder": p.Recorder})
