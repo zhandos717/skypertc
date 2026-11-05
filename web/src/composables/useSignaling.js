@@ -39,6 +39,11 @@ function attachHandlers(ws) {
         state.connectionStatus = `${state.peers.size + 1} участник(ов)`;
         break;
       }
+      case 'replaced': {
+        leave();
+        state.connectionStatus = 'Звонок открыт в другом окне';
+        break;
+      }
       case 'peer-left': {
         removePeer(m.from);
         break;
@@ -104,7 +109,7 @@ function attachHandlers(ws) {
       newWs.onopen = () => {
         internals.reconnectAttempts = 0;
         state.connectionStatus = 'Подключение...';
-        wsSend({ type: 'join', room: savedRoom, name: state.userName, public: !savedSecret, secret: savedSecret });
+        wsSend({ type: 'join', room: savedRoom, name: state.userName, public: !savedSecret, secret: savedSecret, ident: state.ident });
       };
       attachHandlers(newWs);
     }, delay);
@@ -143,7 +148,7 @@ export async function join({ room, isPublic, secret }) {
     state.ws = ws;
 
     ws.onopen = () => {
-      wsSend({ type: 'join', room, name: state.userName, public: isPublic, secret: secret || '' });
+      wsSend({ type: 'join', room, name: state.userName, public: isPublic, secret: secret || '', ident: state.ident });
       state.currentRoom = room;
       state.connectionStatus = 'Подключение...';
       addRecent(room);

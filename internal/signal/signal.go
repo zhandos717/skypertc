@@ -1,7 +1,10 @@
 package signal
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -46,6 +49,7 @@ type SignalMsg struct {
 	Public  bool            `json:"public,omitempty"`
 	Secret  string          `json:"secret,omitempty"`
 	Token   string          `json:"token,omitempty"`
+	Ident   string          `json:"ident,omitempty"`
 	From    string          `json:"from,omitempty"`
 	To      string          `json:"to,omitempty"`
 	Reason  string          `json:"reason,omitempty"`
@@ -166,6 +170,10 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			}
 			c.ID = randutil.RandID()
 			c.Recorder = isRecorder(m.Token)
+			c.Ident = ""
+			if !c.Recorder {
+				c.Ident = verifyIdent(m.Room, m.Ident)
+			}
 			c.Name = m.Name
 			if !c.Recorder && m.Name == recorderName {
 				c.Name = "Гость"
@@ -179,6 +187,7 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room.Mu.Unlock()
 
 			room.Mu.Lock()
+			stale := evictSameIdent(room, c)
 			if limit := h.Settings.Get().MaxRoomPeers; limit > 0 && !c.Recorder && room.Secret != "" && room.People() >= limit {
 				room.Mu.Unlock()
 				c.Room = ""
@@ -198,6 +207,7 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 				}
 			}
 			room.Mu.Unlock()
+			dropEvicted(stale, others)
 
 			welcome, _ := json.Marshal(map[string]any{
 				"type":  "welcome",
@@ -260,4 +270,52 @@ const recorderName = "__rec__"
 func isRecorder(token string) bool {
 	secret := os.Getenv("RECORD_SECRET")
 	return secret != "" && subtle.ConstantTimeCompare([]byte(token), []byte(secret)) == 1
+}
+
+// verifyIdent принимает "ключ.подпись", где подпись = HMAC(RECORD_SECRET, комната|ключ), и возвращает ключ.
+// Без подписи любой участник мог бы выдать себя за другого и выгнать его из звонка.
+func verifyIdent(room, ident string) string {
+	secret := os.Getenv("RECORD_SECRET")
+	i := strings.LastIndex(ident, ".")
+	if secret == "" || i <= 0 {
+		return ""
+	}
+	key, sig := ident[:i], ident[i+1:]
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(room + "|" + key))
+	if !hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sig)) {
+		return ""
+	}
+	return key
+}
+
+// evictSameIdent убирает из комнаты прежние подключения того же человека: пока сервер не заметит обрыв,
+// такое подключение занимало бы место в лимите. Вызывать под Room.Mu.
+func evictSameIdent(room *hub.Room, c *hub.Client) []*hub.Client {
+	if c.Ident == "" {
+		return nil
+	}
+	var stale []*hub.Client
+	for id, p := range room.Clients {
+		if p.Ident == c.Ident && !p.Recorder {
+			stale = append(stale, p)
+			delete(room.Clients, id)
+		}
+	}
+	return stale
+}
+
+func dropEvicted(stale, remaining []*hub.Client) {
+	for _, p := range stale {
+		left, _ := json.Marshal(map[string]any{"type": "peer-left", "from": p.ID})
+		for _, o := range remaining {
+			if o != p {
+				o.Write(left)
+			}
+		}
+		replaced, _ := json.Marshal(map[string]any{"type": "replaced"})
+		p.Write(replaced)
+		conn := p.Conn
+		time.AfterFunc(300*time.Millisecond, func() { conn.Close() })
+	}
 }

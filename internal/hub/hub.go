@@ -13,10 +13,12 @@ type Client struct {
 	Name string
 	// Recorder выставляет только сервер: join с верным RECORD_SECRET; имя от клиента ничего не значит.
 	Recorder bool
-	Room     string
-	Conn     *websocket.Conn
-	Send     chan []byte
-	Mu       sync.Mutex
+	// Ident — подтверждённый бэкендом идентификатор человека; пусто, если подпись не сошлась.
+	Ident string
+	Room  string
+	Conn  *websocket.Conn
+	Send  chan []byte
+	Mu    sync.Mutex
 }
 
 type Room struct {

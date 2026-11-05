@@ -11,6 +11,7 @@ export const state = reactive({
   myId: null,
   currentRoom: null,
   currentSecret: '',
+  ident: '',
   /** id → { id, name, stream, abr: { tier, kbps, loss, rtt, q } | null, speaking } */
   peers: new Map(),
   peerNames: new Map(),
