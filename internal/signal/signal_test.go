@@ -119,3 +119,26 @@ func TestForgedIdentCannotEvictAnotherPerson(t *testing.T) {
 		t.Fatalf("forged ident must not evict anyone, got %q", got)
 	}
 }
+
+func TestDeniedJoinDoesNotEvictTheSamePersonsOldConnection(t *testing.T) {
+	t.Setenv("RECORD_SECRET", "s3")
+	h := hub.NewHub()
+	h.Settings = hub.NewSettingsStore(hub.Settings{MaxRoomPeers: 2}, "")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { ServeWS(h, ratelimit.New(20), w, r) }))
+	defer srv.Close()
+
+	dialJoin(t, srv, "A", identFor("s3", "croom", "u1"))
+	dialJoin(t, srv, "B", identFor("s3", "croom", "w2"))
+	if _, got := dialJoin(t, srv, "C", identFor("s3", "croom", "u3")); got != "denied" {
+		t.Fatalf("third person must be denied, got %q", got)
+	}
+
+	h.Mu.RLock()
+	room := h.Rooms["croom"]
+	h.Mu.RUnlock()
+	room.Mu.RLock()
+	defer room.Mu.RUnlock()
+	if room.People() != 2 {
+		t.Fatalf("denied join must leave both members in place, got %d", room.People())
+	}
+}

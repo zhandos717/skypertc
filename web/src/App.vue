@@ -68,6 +68,10 @@ onMounted(() => {
   state.embed = query.get('embed') === '1';
   state.audioOnly = query.get('mode') === 'audio';
   state.ident = query.get('ident') || '';
+  if (state.ident) {
+    query.delete('ident');
+    history.replaceState(null, '', location.pathname + (query.size ? '?' + query : '') + location.hash);
+  }
   const nameFromUrl = (query.get('name') || '').trim().slice(0, 60);
 
   // Establish/persist user name. Имя из ссылки приоритетнее и не сохраняется: звонок идёт от имени вошедшего в чат.

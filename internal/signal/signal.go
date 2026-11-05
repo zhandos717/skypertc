@@ -187,13 +187,16 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room.Mu.Unlock()
 
 			room.Mu.Lock()
-			stale := evictSameIdent(room, c)
-			if limit := h.Settings.Get().MaxRoomPeers; limit > 0 && !c.Recorder && room.Secret != "" && room.People() >= limit {
+			stale := sameIdent(room, c)
+			if limit := h.Settings.Get().MaxRoomPeers; limit > 0 && !c.Recorder && room.Secret != "" && room.People()-len(stale) >= limit {
 				room.Mu.Unlock()
 				c.Room = ""
 				deny, _ := json.Marshal(map[string]any{"type": "denied", "reason": "В комнате уже максимум участников"})
 				c.Write(deny)
 				continue
+			}
+			for _, p := range stale {
+				delete(room.Clients, p.ID)
 			}
 			peers := make([]map[string]any, 0, len(room.Clients))
 			for _, p := range room.Clients {
@@ -234,6 +237,12 @@ func ServeWS(h *hub.Hub, limiter *ratelimit.IPLimiter, w http.ResponseWriter, r 
 			room, ok := h.Rooms[c.Room]
 			h.Mu.RUnlock()
 			if !ok {
+				continue
+			}
+			room.Mu.RLock()
+			member := room.Clients[c.ID] == c
+			room.Mu.RUnlock()
+			if !member {
 				continue
 			}
 			m.From = c.ID
@@ -289,17 +298,16 @@ func verifyIdent(room, ident string) string {
 	return key
 }
 
-// evictSameIdent убирает из комнаты прежние подключения того же человека: пока сервер не заметит обрыв,
+// sameIdent находит прежние подключения того же человека: пока сервер не заметит обрыв,
 // такое подключение занимало бы место в лимите. Вызывать под Room.Mu.
-func evictSameIdent(room *hub.Room, c *hub.Client) []*hub.Client {
+func sameIdent(room *hub.Room, c *hub.Client) []*hub.Client {
 	if c.Ident == "" {
 		return nil
 	}
 	var stale []*hub.Client
-	for id, p := range room.Clients {
+	for _, p := range room.Clients {
 		if p.Ident == c.Ident && !p.Recorder {
 			stale = append(stale, p)
-			delete(room.Clients, id)
 		}
 	}
 	return stale
